@@ -12,11 +12,4 @@ typedef enum
   INSCRIPTION_KO = 12
 } Code;
 
-/* struct message used between server and client */
-typedef struct
-{
-  char messageText[MAX_PSEUDO];
-  int code;
-} StructMessage;
-
 #endif

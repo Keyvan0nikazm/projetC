@@ -11,6 +11,8 @@
 #include "header.h"
 #include "utils_v3.h"
 
+#define SHM_KEY 248
+#define SEM_KEY 369
 #define MAX_PLAYERS 2
 #define BACKLOG 5
 
@@ -21,19 +23,33 @@ typedef struct Player
 } Player;
 
 volatile sig_atomic_t end = 0;
+volatile sig_atomic_t registrationTimeout = 0; // Flag for registration timeout
 
 void endServerHandler(int sig)
 {
   end = 1;
 }
 
+void alarmHandler(int sig)
+{
+  registrationTimeout = 1; // Set timeout flag
+  printf("Temps d'inscription écoulé. Fermeture du serveur...\n");
+}
+
+void startRegistrationTimer()
+{
+  alarm(30); // Set a 30-second timer
+}
 
 void terminate(Player *tabPlayers, int nbPlayers)
 {
   printf("\nJoueurs inscrits : \n");
   for (int i = 0; i < nbPlayers; i++)
   {
-    printf("  - %s inscrit\n", tabPlayers[i].pseudo);
+    printf("  - Client %d inscrit\n", i + 1);
+    const char *message = "Temps d'inscription écoulé. Fermeture du serveur.\n";
+    nwrite(tabPlayers[i].sockfd, message, strlen(message));
+    sclose(tabPlayers[i].sockfd);
   }
   exit(0);
 }
@@ -57,7 +73,11 @@ int initSocketServer(int serverPort)
 
 int main(int argc, char **argv)
 {
-  StructMessage msg;
+  // GET SEMAPHORE
+  int sem_id = sem_get(SEM_KEY, 0);
+  // GET SHARED MEMORY
+  int shm_id = sshmget(SHM_KEY, sizeof(int), 0);
+
   Player tabPlayers[MAX_PLAYERS];
   int nbPlayers = 0;
 
@@ -69,6 +89,7 @@ int main(int argc, char **argv)
 
   ssigaction(SIGTERM, endServerHandler);
   ssigaction(SIGINT, endServerHandler);
+  ssigaction(SIGALRM, alarmHandler); // Handle SIGALRM for the timer
 
   int sockfd = initSocketServer(SERVER_PORT);
   printf("Le serveur tourne sur le port : %i \n", SERVER_PORT);
@@ -76,37 +97,50 @@ int main(int argc, char **argv)
 
   while (!end)
   {
-
-    /* client trt */
-    int newsockfd = accept(sockfd, NULL, NULL);
-    if (end)
+    int newsockfd;
+    while ((newsockfd = accept(sockfd, NULL, NULL)) < 0)
     {
-      terminate(tabPlayers, nbPlayers);
+      if (errno == EINTR)
+      {
+        if (registrationTimeout)
+        {
+          terminate(tabPlayers, nbPlayers); // Gracefully terminate on timeout
+        }
+        continue; // Retry accept() if interrupted
+      }
+      perror("ERROR accept");
+      exit(EXIT_FAILURE);
     }
-    checkNeg(newsockfd, "ERROR accept");
 
-    ssize_t ret = read(newsockfd, &msg, sizeof(msg));
-    if (end)
-    {
-      terminate(tabPlayers, nbPlayers);
-    }
-    checkNeg(ret, "ERROR READ");
-
-    printf("Inscription demandée par le joueur : %s\n", msg.messageText);
     if (nbPlayers < MAX_PLAYERS)
     {
-      msg.code = INSCRIPTION_OK;
-      strcpy(tabPlayers[nbPlayers].pseudo, msg.messageText);
       tabPlayers[nbPlayers].sockfd = newsockfd;
       nbPlayers++;
+
+      char message[50];
+      snprintf(message, sizeof(message), "Client %d inscrit à une partie\n", nbPlayers);
+      nwrite(newsockfd, message, strlen(message));
+      printf("%s", message);
+
+      if (nbPlayers == 1)
+      {
+        printf("Premier client connecté, démarrage du chrono de 30 secondes...\n");
+        startRegistrationTimer(); // Start the 30-second timer
+      }
     }
     else
     {
-      msg.code = INSCRIPTION_KO;
+      const char *message = "Partie complète, inscription refusée\n";
+      nwrite(newsockfd, message, strlen(message));
+      printf("%s", message);
+      sclose(newsockfd);
     }
 
-    nwrite(newsockfd, &msg, sizeof(msg));
-    printf("Nb Inscriptions : %i\n", nbPlayers);
+    if (registrationTimeout && nbPlayers < MAX_PLAYERS)
+    {
+      terminate(tabPlayers, nbPlayers); // Gracefully terminate on timeout
+    }
   }
+
   sclose(sockfd);
 }

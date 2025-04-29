@@ -25,31 +25,21 @@
  }
 
 int main(int argc, char *argv[]) {
-  /* retrieve player name */
-  printf("Bienvenue dans le programe d'inscription au serveur de jeu\n");
-  printf("Pour participer entrez votre nom :\n");
-  StructMessage msg;
-  int ret = sread(0, msg.messageText, MAX_PSEUDO);
-  if (ret < 2) {
-        printf("Erreur: vous devez entrer un nom de joueur\n");
-        exit(1);
-  }
-  msg.messageText[ret - 1] = '\0';
-  msg.code = INSCRIPTION_REQUEST;
+  printf("Bienvenue dans le programme d'inscription au serveur de jeu\n");
 
   int sockfd = initSocketClient(SERVER_IP, SERVER_PORT);
-  swrite(sockfd, &msg, sizeof(msg));
 
   /* wait server response */
-  sread(sockfd, &msg, sizeof(msg));
-
-  if (msg.code == INSCRIPTION_OK)
+  char buffer[50];
+  ssize_t ret = sread(sockfd, buffer, sizeof(buffer) - 1);
+  if (ret > 0)
   {
-    printf("Réponse du serveur : Inscription acceptée\n");
+    buffer[ret] = '\0';
+    printf("Réponse du serveur : %s", buffer);
   }
-  else if (msg.code == INSCRIPTION_KO)
+  else
   {
-    printf("Réponse du serveur : Inscription refusée\n");
+    printf("Erreur lors de la réception de la réponse du serveur\n");
   }
 
   sclose(sockfd);
