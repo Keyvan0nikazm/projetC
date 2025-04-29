@@ -7,12 +7,18 @@
 #include <netinet/in.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/ipc.h>
+#include <sys/sem.h>
+#include <sys/shm.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <ctype.h>
+
 
 #include "header.h"
+#include "game.h"
 #include "utils_v3.h"
 
-#define SHM_KEY 248
-#define SEM_KEY 369
 #define MAX_PLAYERS 2
 #define BACKLOG 5
 
@@ -49,9 +55,13 @@ void terminate(Player *tabPlayers, int nbPlayers)
     printf("  - Client %d inscrit\n", i + 1);
     const char *message = "Temps d'inscription écoulé. Fermeture du serveur.\n";
     nwrite(tabPlayers[i].sockfd, message, strlen(message));
-    sclose(tabPlayers[i].sockfd);
+    // Ne fermez pas les sockets ici si vous voulez continuer à utiliser les connexions
+    // sclose(tabPlayers[i].sockfd);
   }
-  exit(0);
+  
+  // Au lieu de terminer le programme, continuez avec un jeu à un seul joueur
+  // Ne faites pas exit(0) ici
+  end = 1; // Signaler la fin de la phase d'inscription
 }
 
 /**
@@ -73,11 +83,6 @@ int initSocketServer(int serverPort)
 
 int main(int argc, char **argv)
 {
-  // GET SEMAPHORE
-  int sem_id = sem_get(SEM_KEY, 0);
-  // GET SHARED MEMORY
-  int shm_id = sshmget(SHM_KEY, sizeof(int), 0);
-
   Player tabPlayers[MAX_PLAYERS];
   int nbPlayers = 0;
 
@@ -104,7 +109,8 @@ int main(int argc, char **argv)
       {
         if (registrationTimeout)
         {
-          terminate(tabPlayers, nbPlayers); // Gracefully terminate on timeout
+          terminate(tabPlayers, nbPlayers); // Ne termine plus le programme, signale juste la fin
+          break; // Sortez de la boucle pour continuer avec le programme
         }
         continue; // Retry accept() if interrupted
       }
@@ -127,6 +133,12 @@ int main(int argc, char **argv)
         printf("Premier client connecté, démarrage du chrono de 30 secondes...\n");
         startRegistrationTimer(); // Start the 30-second timer
       }
+      else if (nbPlayers == MAX_PLAYERS)
+      {
+        printf("Deuxième client connecté, arrêt du chrono.\n");
+        alarm(0);
+        break;
+      }
     }
     else
     {
@@ -138,8 +150,35 @@ int main(int argc, char **argv)
 
     if (registrationTimeout && nbPlayers < MAX_PLAYERS)
     {
-      terminate(tabPlayers, nbPlayers); // Gracefully terminate on timeout
+      terminate(tabPlayers, nbPlayers); // Ne termine plus le programme, signale juste la fin
+      break; // Sortez de la boucle pour continuer avec le programme
     }
+  }
+  
+  printf("Phase d'inscription terminée. Démarrage du jeu avec %d joueur(s).\n", nbPlayers);
+
+  // GET SHARED MEMORY
+  int shm_id = sshmget(SHM_KEY,2 * sizeof(pid_t), IPC_CREAT | PERM);
+  int *z = sshmat(shm_id);
+
+  sem_create(SEM_KEY, 1, PERM, 0);
+
+  struct GameState gameState;
+
+  if (*z == 0) {
+    printf("Chargement de la carte...\n");
+    FileDescriptor fdmap = sopen("./resources/map.txt", O_RDONLY, 0);
+    FileDescriptor sout = 1;
+    load_map(fdmap, sout, &gameState);
+    sclose(fdmap);
+    *z = 1;
+  }
+
+  int childId = sfork();
+  if (childId == 0) {
+
+  } else {
+
   }
 
   sclose(sockfd);
