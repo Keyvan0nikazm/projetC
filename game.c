@@ -27,7 +27,7 @@ int32_t id_at(struct Position pos, enum Item item);
 size_t position2index(struct Position pos);
 
 // Cette fonction ecrit le message approprié pour signifier aux clients qu'une 
-// resource donnée est introduite dans le jeu.
+// rsouerce donnée est introduite dans le jeu.
 void send_spawn_item(uint32_t x, uint32_t y, enum Item item, FileDescriptor fdbcast);
 // Cette fonction ecrit le message approprié pour signifier aux clients qu'un 
 // des joueurs a bougé sur le plateau de jeu.

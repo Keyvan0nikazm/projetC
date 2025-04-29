@@ -178,17 +178,19 @@ int main(int argc, char **argv)
 
   int childId = sfork();
   if (childId != 0) {
+
   ret = sclose(pipefd[0]);
   int childId2 = sfork();
+
     if (childId2 == 0){
       ret = sclose(pipefd[1]);
     }
+
   int status;
-  swaitpid(childId, &status, 0);
+  swaitpid(childId,&status, 0);
+  swaitpid(childId2,&status, 0);
 
-  int shm_id2 = shmget(SHM_KEY, 2 * sizeof(pid_t), 0);
-  checkNeg(shm_id2, "IPCs not existing");
-
+  int shm_id2 = sshmget(SHM_KEY, 2 * sizeof(pid_t), 0);
   sshmdelete(shm_id2);
 
   int sem_id = sem_get(SEM_KEY, 1);
