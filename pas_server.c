@@ -173,24 +173,32 @@ int main(int argc, char **argv)
     *z = 1;
   }
 
+  int pipefd[2];
+  int ret = spipe(pipefd);
+
   int childId = sfork();
-  if (childId == 0) {
-  exit(0);
-  } else {
+  if (childId != 0) {
+  ret = sclose(pipefd[0]);
+  int childId2 = sfork();
+    if (childId2 == 0){
+      ret = sclose(pipefd[1]);
+    }
   int status;
   swaitpid(childId, &status, 0);
 
-  // IPC destruction
-  printf("Destroying IPCs...\n");
   int shm_id2 = shmget(SHM_KEY, 2 * sizeof(pid_t), 0);
   checkNeg(shm_id2, "IPCs not existing");
 
   sshmdelete(shm_id2);
-  
+
   int sem_id = sem_get(SEM_KEY, 1);
   sem_delete(sem_id);
 
   printf("IPCs freed.\n");
   sclose(sockfd);
+  } else {
+    bool valid = true;
+    ret = sclose(pipefd[0]);
+    exit(0);
   }
 }
