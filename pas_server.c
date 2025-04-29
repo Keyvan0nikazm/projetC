@@ -184,6 +184,7 @@ int main(int argc, char **argv)
 
     if (childId2 == 0){
       ret = sclose(pipefd[1]);
+      exit(0);
     }
 
   int status;
