@@ -52,7 +52,6 @@ int main(int argc, char *argv[]) {
     
     // Redirect both stdin and stdout to the socket
     dup2(sockfd, STDIN_FILENO);
-    dup2(sockfd, STDOUT_FILENO);
 
     // Exécuter pas-cman-ipl
     printf("Lancement de l'interface graphique pas-cman-ipl...\n");
