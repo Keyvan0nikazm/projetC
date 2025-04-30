@@ -21,6 +21,7 @@
 
 #define MAX_PLAYERS 2
 #define BACKLOG 5
+#define TAILLE 1024
 
 typedef struct Player
 {
@@ -165,56 +166,94 @@ int main(int argc, char **argv)
 
   struct GameState gameState;
 
-  if (*z == 0) {;
-    FileDescriptor fdmap = sopen("./resources/map.txt", O_RDONLY, 0);
-    FileDescriptor sout = 1;
-    load_map(fdmap, sout, &gameState);
-    sclose(fdmap);
-    *z = 1;
-  }
+  // if (*z == 0) {;
+  //   FileDescriptor fdmap = sopen("./resources/map.txt", O_RDONLY, 0);
+  //   FileDescriptor sout = 1;
+  //   load_map(fdmap, sout, &gameState);
+  //   sclose(fdmap);
+  //   *z = 1;
+  // }
 
   int pipefd[2];
   int ret = spipe(pipefd);
-
-  int childId = sfork();
-  if (childId != 0) {
-
-  int childId2 = sfork();
-
-    if (childId2 == 0){
-      //BroadCaster
-      ret = sclose(pipefd[1]);
-
-
-      ret = sclose(sockfd);
-      exit(0);
-    }
-
-  ret = sclose(pipefd[0]);
-
-  int status;
-  swaitpid(childId,&status, 0);
-  swaitpid(childId2,&status, 0);
-
-  int shm_id2 = sshmget(SHM_KEY, 2 * sizeof(pid_t), 0);
-  sshmdelete(shm_id2);
-
-  int sem_id = sem_get(SEM_KEY, 1);
-  sem_delete(sem_id);
-
-  printf("IPCs freed.\n");
-
   
-  ret = sclose(pipefd[1]);
-
-  sclose(sockfd);
-
-  } else {
-    //client-handler
-    bool valid = true;
-    ret = sclose(pipefd[0]);
-
-    ret = sclose(pipefd[1]);
-    exit(0);
+  int childId = sfork();
+  if (childId == 0) {
+      // PREMIER ENFANT (client-handler)
+      bool valid = true;
+      ret = sclose(pipefd[0]);
+      printf("Je suis le client-handler (pid: %d)\n", getpid());
+      fflush(stdout);
+      
+      // Code du client-handler
+      
+      ret = sclose(pipefd[1]);
+      exit(0);
+  } 
+  else {
+      // PARENT OU DEUXIÈME ENFANT
+      int childId2 = sfork();
+      if (childId2 == 0) {
+          // DEUXIÈME ENFANT (broadcaster)
+          ret = sclose(pipefd[1]);
+          printf("Je suis le broadcaster (pid: %d)\n", getpid());
+          fflush(stdout);
+          
+          // Code du broadcaster
+          char buffer[TAILLE];
+          ssize_t bytes_read;
+          
+          // First send registration message to each client
+          for (int i = 0; i < nbPlayers; i++) {
+              send_registered(i+1, tabPlayers[i].sockfd); // Send player ID (1 or 2)
+          }
+          
+          while((bytes_read = sread(pipefd[0], buffer, sizeof(buffer))) > 0) {
+              for (int i = 0; i < nbPlayers; i++){
+                  nwrite(tabPlayers[i].sockfd, buffer, bytes_read);
+              }
+          }
+          ret = sclose(sockfd);
+          exit(0);
+      }
+      else {
+          // PARENT
+          ret = sclose(pipefd[0]); // Ferme l'extrémité de lecture
+          printf("Je suis le parent (pid: %d)\n", getpid());
+          fflush(stdout);
+          
+          // Chargement de la carte
+          FileDescriptor fdmap = sopen("./resources/map.txt", O_RDONLY, 0);
+          load_map(fdmap, pipefd[1], &gameState);
+          sclose(fdmap);
+          
+          // Attendre que les enfants terminent
+          int status;
+          printf("Parent: attente de la fin des processus enfants...\n");
+          fflush(stdout);
+          swaitpid(childId, &status, 0);
+          swaitpid(childId2, &status, 0);
+          
+          // Nettoyage
+          printf("Parent: nettoyage des ressources...\n");
+          fflush(stdout);
+          
+          // Code de nettoyage des IPCs
+          int shm_id2 = sshmget(SHM_KEY, 2 * sizeof(pid_t), 0);
+          if (shm_id2 >= 0) {
+              sshmdelete(shm_id2);
+          }
+          
+          int sem_id = sem_get(SEM_KEY, 1);
+          if (sem_id >= 0) {
+              sem_delete(sem_id);
+          }
+          
+          printf("IPCs freed.\n");
+          fflush(stdout);
+          
+          ret = sclose(pipefd[1]);
+          sclose(sockfd);
+      }
   }
 }

@@ -8,7 +8,11 @@
 #include <sys/types.h>
 
 #include "header.h"
+#include "game.h"
+#include "pascman.h"
 #include "utils_v3.h"
+
+#define TAILLE 1024
 
 /**
  * PRE: serverIP : a valid IP address
@@ -40,6 +44,28 @@ int main(int argc, char *argv[]) {
   else
   {
     printf("Erreur lors de la réception de la réponse du serveur\n");
+  }
+
+  int childId = sfork();
+  if (childId == 0){
+    printf("Je suis le processus PAC-MAN-IPL (pid: %d)\n", getpid());
+    
+    // Redirect both stdin and stdout to the socket
+    dup2(sockfd, STDIN_FILENO);
+    dup2(sockfd, STDOUT_FILENO);
+
+    // Exécuter pas-cman-ipl
+    printf("Lancement de l'interface graphique pas-cman-ipl...\n");
+    execl("./target/release/pas-cman-ipl", "pas-cman-ipl", NULL);
+
+    // This code is only reached if execl fails
+    perror("Error executing pas-cman-ipl");
+    exit(EXIT_FAILURE);
+  }else{
+    printf("Je suis le processus parent (pid: %d)\n", getpid());
+
+    int status;
+    swaitpid(childId, &status, 0);
   }
 
   sclose(sockfd);
