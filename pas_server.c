@@ -207,6 +207,8 @@ int main(int argc, char **argv)
           for (int i = 0; i < nbPlayers; i++) {
               send_registered(i+1, tabPlayers[i].sockfd); // Send player ID (1 or 2)
           }
+
+          
           
           while((bytes_read = sread(pipefd[0], buffer, sizeof(buffer))) > 0) {
               for (int i = 0; i < nbPlayers; i++){
@@ -221,6 +223,8 @@ int main(int argc, char **argv)
           ret = sclose(pipefd[0]); // Ferme l'extrémité de lecture
           printf("Je suis le parent (pid: %d)\n", getpid());
           fflush(stdout);
+
+          reset_gamestate(&gameState);
           
           // Chargement de la carte
           FileDescriptor fdmap = sopen("./resources/map.txt", O_RDONLY, 0);
