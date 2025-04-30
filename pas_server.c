@@ -14,73 +14,9 @@
 #include <fcntl.h>
 #include <ctype.h>
 
-
 #include "header.h"
 #include "game.h"
 #include "utils_v3.h"
-
-#define MAX_PLAYERS 2
-#define BACKLOG 5
-#define TAILLE 1024
-
-typedef struct Player
-{
-  char pseudo[MAX_PSEUDO];
-  int sockfd;
-} Player;
-
-volatile sig_atomic_t end = 0;
-volatile sig_atomic_t registrationTimeout = 0; // Flag for registration timeout
-
-void endServerHandler(int sig)
-{
-  end = 1;
-}
-
-void alarmHandler(int sig)
-{
-  registrationTimeout = 1; // Set timeout flag
-  printf("Temps d'inscription écoulé. Fermeture du serveur...\n");
-}
-
-void startRegistrationTimer()
-{
-  alarm(30); // Set a 30-second timer
-}
-
-void terminate(Player *tabPlayers, int nbPlayers)
-{
-  printf("\nJoueurs inscrits : \n");
-  for (int i = 0; i < nbPlayers; i++)
-  {
-    printf("  - Client %d inscrit\n", i + 1);
-    const char *message = "Temps d'inscription écoulé. Fermeture du serveur.\n";
-    nwrite(tabPlayers[i].sockfd, message, strlen(message));
-    // Ne fermez pas les sockets ici si vous voulez continuer à utiliser les connexions
-    // sclose(tabPlayers[i].sockfd);
-  }
-  
-  // Au lieu de terminer le programme, continuez avec un jeu à un seul joueur
-  // Ne faites pas exit(0) ici
-  end = 1; // Signaler la fin de la phase d'inscription
-}
-
-/**
- * PRE:  serverPort: a valid port number
- * POST: on success, binds a socket to 0.0.0.0:serverPort and listens to it ;
- *       on failure, displays error cause and quits the program
- * RES: return socket file descriptor
- */
-int initSocketServer(int serverPort)
-{
-  struct sockaddr_in addr;
-
-  int sockfd = ssocket();
-  sbind(SERVER_PORT, sockfd);
-  slisten(sockfd, BACKLOG);
-
-  return sockfd;
-}
 
 int main(int argc, char **argv)
 {
@@ -182,14 +118,6 @@ int main(int argc, char **argv)
           // CLIENT-HANDLER pour le joueur i
           ret = sclose(pipefd[0]);
 
-          // Initialisation mémoire partagée et sémaphore (client-handler)
-          int shm_id2 = sshmget(SHM_KEY, 2 * sizeof(pid_t), 0);
-          struct GameState *shared_state = (struct GameState *)shmat(shm_id2, NULL, 0);
-          int sem_id = sem_get(SEM_KEY, 1);
-
-          // Boucle de réception des mouvements du client
-          // Synchronisation mémoire partagée + sémaphore
-          // Attach shared memory and get semaphore
           char move_buffer[TAILLE];
           ssize_t move_bytes;
           while ((move_bytes = sread(tabPlayers[i].sockfd, move_buffer, sizeof(move_buffer))) > 0) {

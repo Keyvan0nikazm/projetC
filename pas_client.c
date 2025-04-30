@@ -12,26 +12,11 @@
 #include "pascman.h"
 #include "utils_v3.h"
 
-#define TAILLE 1024
-
-/**
- * PRE: serverIP : a valid IP address
- *      serverPort: a valid port number
- * POST: on success, connects a client socket to serverIP:serverPort
- *       on failure, displays error cause and quits the program
- * RES: return socket file descriptor
- */
-int initSocketClient(char * serverIP, int serverPort)
-{
-  int sockfd = ssocket();
-  sconnect(serverIP, serverPort, sockfd);
-  return sockfd;
-}
-
 int main(int argc, char *argv[]) {
   printf("Bienvenue dans le programme d'inscription au serveur de jeu\n");
 
-  int sockfd = initSocketClient(SERVER_IP, SERVER_PORT);
+  int sockfd = ssocket();
+  sconnect(SERVER_IP, SERVER_PORT, sockfd);
 
   /* wait server response */
   char buffer[50];
@@ -85,11 +70,11 @@ int main(int argc, char *argv[]) {
     // Initialize game state here if needed
     
     // Buffer for reading from pipe
-    char command_buffer[TAILLE];
+    char command_buffer[1024];
     ssize_t bytes_read;
 
     // Main communication loop
-    while ((bytes_read = sread(pipefd[0], command_buffer, TAILLE - 1)) > 0) {
+    while ((bytes_read = sread(pipefd[0], command_buffer, 1024 - 1)) > 0) {
       command_buffer[bytes_read] = '\0';
       
       // Debugging: Print raw received data with visible representation of non-printable chars
