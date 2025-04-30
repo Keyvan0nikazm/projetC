@@ -121,13 +121,9 @@ int main(int argc, char *argv[]) {
           printf("Received direction (binary): %d\n", dir);
           
           // Process the command
-          bool success = process_user_command(&state, player, dir, sockfd);
-          
-          if (success) {
-            printf("Command processed successfully\n");
-          } else {
-            printf("Error processing command\n");
-          }
+          // Envoyer la direction au serveur via le socket
+          nwrite(sockfd, &dir, sizeof(dir));
+
         } else {
           printf("Invalid direction value: %d\n", direction_value);
         }
