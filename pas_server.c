@@ -46,7 +46,7 @@ int main(int argc, char **argv)
       {
         if (registrationTimeout)
         {
-          terminate(tabPlayers, nbPlayers); // Ne termine plus le programme, signale juste la fin
+          terminate(tabPlayers, nbPlayers);
           break; // Sortez de la boucle pour continuer avec le programme
         }
         continue; // Retry accept() if interrupted
@@ -94,13 +94,9 @@ int main(int argc, char **argv)
   
   printf("Phase d'inscription terminée. Démarrage du jeu avec %d joueur(s).\n", nbPlayers);
 
-  // GET SHARED MEMORY
-  int shm_id = sshmget(SHM_KEY,2 * sizeof(pid_t), IPC_CREAT | PERM);
-  int *z = sshmat(shm_id);
-
-  // Initialisation mémoire partagée et sémaphore (parent)
-  int shm_id2 = sshmget(SHM_KEY, 2 * sizeof(pid_t), 0);
-  struct GameState *shared_state = (struct GameState *)shmat(shm_id2, NULL, 0);
+  // GET SHARED MEMORY et initialisation mémoire partagée et sémaphore (parent)
+  int shm_id = sshmget(SHM_KEY, 2 * sizeof(pid_t), IPC_CREAT | PERM);
+  struct GameState *shared_state = (struct GameState *)shmat(shm_id, NULL, 0);
   int sem_id = sem_get(SEM_KEY, 1);
 
   sem_create(SEM_KEY, 1, PERM, 1);
@@ -194,8 +190,8 @@ int main(int argc, char **argv)
       // Nettoyage
       
       // Code de nettoyage des IPCs
-      if (shm_id2 >= 0) {
-          sshmdelete(shm_id2);
+      if (shm_id >= 0) {
+          sshmdelete(shm_id);
       }
       
       if (sem_id >= 0) {
