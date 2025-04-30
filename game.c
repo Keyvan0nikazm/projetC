@@ -202,7 +202,6 @@ void send_registered(uint32_t player, FileDescriptor socket) {
 
     swrite(socket, &msg, sizeof(union Message));
 }
-
 // Cette fonction ecrit le message approprié pour signifier aux clients qu'une 
 // resource donnée est introduite dans le jeu.
 void send_spawn_item(uint32_t x, uint32_t y, enum Item item, FileDescriptor fdbcast) {

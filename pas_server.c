@@ -179,13 +179,18 @@ int main(int argc, char **argv)
   int childId = sfork();
   if (childId != 0) {
 
-  ret = sclose(pipefd[0]);
   int childId2 = sfork();
 
     if (childId2 == 0){
+      //BroadCaster
       ret = sclose(pipefd[1]);
+
+
+      ret = sclose(sockfd);
       exit(0);
     }
+
+  ret = sclose(pipefd[0]);
 
   int status;
   swaitpid(childId,&status, 0);
@@ -198,10 +203,18 @@ int main(int argc, char **argv)
   sem_delete(sem_id);
 
   printf("IPCs freed.\n");
+
+  
+  ret = sclose(pipefd[1]);
+
   sclose(sockfd);
+
   } else {
+    //client-handler
     bool valid = true;
     ret = sclose(pipefd[0]);
+
+    ret = sclose(pipefd[1]);
     exit(0);
   }
 }
