@@ -97,9 +97,8 @@ int main(int argc, char **argv)
   // GET SHARED MEMORY et initialisation mémoire partagée et sémaphore (parent)
   int shm_id = sshmget(SHM_KEY, 2 * sizeof(pid_t), IPC_CREAT | PERM);
   struct GameState *shared_state = (struct GameState *)shmat(shm_id, NULL, 0);
-  int sem_id = sem_get(SEM_KEY, 1);
-
   sem_create(SEM_KEY, 1, PERM, 1);
+  int sem_id = sem_get(SEM_KEY, 1);
 
   struct GameState gameState;
 
