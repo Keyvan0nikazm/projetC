@@ -11,6 +11,24 @@
 #include "pascman.h"
 #include "game.h"
 
+// Function to convert character movements to Direction enum values
+char convert_movement_char(char move_char) {
+    // Convert character movement to numeric value
+    switch (move_char) {
+        case 'v':
+            return (char)DOWN;  // 0
+        case '>':
+            return (char)RIGHT; // 1
+        case '<':
+            return (char)LEFT;  // 2
+        case '^':
+            return (char)UP;    // 3
+        default:
+            fprintf(stderr, "Caractère de mouvement invalide: %c\n", move_char);
+            return (char)DOWN;  // Default to DOWN as fallback
+    }
+}
+
 int main(int argc, char **argv) {
     if (argc != 5) {
         fprintf(stderr, "Usage: %s <port> <map_file> <joueur1_file> <joueur2_file>\n", argv[0]);
@@ -118,22 +136,31 @@ int main(int argc, char **argv) {
         perror("Erreur lors de l'ouverture des fichiers de mouvements");
         exit(EXIT_FAILURE);
     }
+    printf("Attente de l'initialisation des interfaces graphiques (10 secondes)...\n");
+    sleep(2);
+
+    printf("Démarrage de l'envoi des mouvements...\n");
 
     char move1, move2;
+    char direction1, direction2;
     while (1) {
         // Read a movement for player 1
         if (fscanf(file1, " %c", &move1) == 1) {
-            nwrite(pipe_client1[1], &move1, sizeof(move1));
+            direction1 = convert_movement_char(move1);
+            nwrite(pipe_client1[1], &direction1, sizeof(direction1));
+            printf("Mouvement envoyé pour le joueur 1: %c (direction %d)\n", move1, direction1);
         }
 
-        usleep(1000000); // Wait 1/10th of a second
+        usleep(100000);
 
         // Read a movement for player 2
         if (fscanf(file2, " %c", &move2) == 1) {
-            nwrite(pipe_client2[1], &move2, sizeof(move2));
+            direction2 = convert_movement_char(move2);
+            nwrite(pipe_client2[1], &direction2, sizeof(direction2));
+            printf("Mouvement envoyé pour le joueur 2: %c (direction %d)\n", move2, direction2);
         }
 
-        usleep(1000000); // Wait 1/10th of a second
+        usleep(100000);
 
         // Break if end of both files is reached
         if (feof(file1) && feof(file2)) {

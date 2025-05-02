@@ -40,15 +40,6 @@ int main(int argc, char *argv[]) {
     printf("Erreur lors de la réception de la réponse du serveur\n");
   }
 
-  if (test_mode) {
-    printf("Mode test activé : lecture des mouvements depuis stdin\n");
-    char move;
-    ssize_t taille;
-    while ((taille = sread(STDIN_FILENO, &move, sizeof(move))) > 0) {
-      nwrite(sockfd, &move, taille);
-    }
-  }
-
   // Create pipe for child-parent communication
   int pipefd[2];
   spipe(pipefd);
@@ -87,54 +78,64 @@ int main(int argc, char *argv[]) {
     struct GameState state;
     // Initialize game state here if needed
     
-    // Buffer for reading from pipe
-    char command_buffer[1024];
-    ssize_t bytes_read;
+    // Handle test mode in the parent process after launching the graphical interface
+    if (test_mode) {
+      printf("Mode test activé : lecture des mouvements depuis stdin\n");
+      char move;
+      ssize_t taille;
+      while ((taille = sread(STDIN_FILENO, &move, sizeof(move))) > 0) {
+        nwrite(sockfd, &move, taille);
+      }
+    } else {
+      // Buffer for reading from pipe
+      char command_buffer[1024];
+      ssize_t bytes_read;
 
-    // Main communication loop
-    while ((bytes_read = sread(pipefd[0], command_buffer, 1024 - 1)) > 0) {
-      command_buffer[bytes_read] = '\0';
-      
-      // Debugging: Print raw received data with visible representation of non-printable chars
-      printf("Raw data received (%ld bytes): ", bytes_read);
-      for (int i = 0; i < bytes_read; i++) {
-        if (command_buffer[i] >= 32 && command_buffer[i] <= 126)
-          printf("%c", command_buffer[i]);
-        else
-          printf("[%02X]", (unsigned char)command_buffer[i]);
-      }
-      printf("\n");
-      
-      // Skip empty packages
-      if (bytes_read == 0) {
-        continue;
-      }
-      
-      // Parse the command from the child
-      enum Item player = PLAYER1; // Default player
-      enum Direction dir = DOWN;  // Default direction
-      
-      // For binary data, interpret the first byte as the direction value
-      if (bytes_read >= 1) {
-        int direction_value = (unsigned char)command_buffer[0];
+      // Main communication loop
+      while ((bytes_read = sread(pipefd[0], command_buffer, 1024 - 1)) > 0) {
+        command_buffer[bytes_read] = '\0';
         
-        // Check if direction value is valid
-        if (direction_value >= 0 && direction_value <= 3) {
-          dir = (enum Direction)direction_value;
-          printf("Received direction (binary): %d\n", dir);
+        // Debugging: Print raw received data with visible representation of non-printable chars
+        printf("Raw data received (%ld bytes): ", bytes_read);
+        for (int i = 0; i < bytes_read; i++) {
+          if (command_buffer[i] >= 32 && command_buffer[i] <= 126)
+            printf("%c", command_buffer[i]);
+          else
+            printf("[%02X]", (unsigned char)command_buffer[i]);
+        }
+        printf("\n");
+        
+        // Skip empty packages
+        if (bytes_read == 0) {
+          continue;
+        }
+        
+        // Parse the command from the child
+        enum Item player = PLAYER1; // Default player
+        enum Direction dir = DOWN;  // Default direction
+        
+        // For binary data, interpret the first byte as the direction value
+        if (bytes_read >= 1) {
+          int direction_value = (unsigned char)command_buffer[0];
           
-          // Process the command
-          // Envoyer la direction au serveur via le socket
-          nwrite(sockfd, &dir, sizeof(dir));
+          // Check if direction value is valid
+          if (direction_value >= 0 && direction_value <= 3) {
+            dir = (enum Direction)direction_value;
+            printf("Received direction (binary): %d\n", dir);
+            
+            // Process the command
+            // Envoyer la direction au serveur via le socket
+            nwrite(sockfd, &dir, sizeof(dir));
 
-        } else {
-          printf("Invalid direction value: %d\n", direction_value);
+          } else {
+            printf("Invalid direction value: %d\n", direction_value);
+          }
         }
       }
+      
+      // Close the read end when done
+      sclose(pipefd[0]);
     }
-    
-    // Close the read end when done
-    sclose(pipefd[0]);
 
     // Wait for child process to terminate
     int status;
