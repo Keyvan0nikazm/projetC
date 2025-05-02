@@ -29,6 +29,14 @@ void sigintHandler(int sig) {
 
 int main(int argc, char **argv)
 {
+  if (argc != 3) {
+    fprintf(stderr, "Usage: %s <port> <map_file>\n", argv[0]);
+    exit(EXIT_FAILURE);
+  }
+
+  int port = atoi(argv[1]);
+  char *map_file = argv[2];
+
   int keep_running = 1;  // Flag to control the server main loop
   
   // Set up signal handling once for the entire program
@@ -46,8 +54,8 @@ int main(int argc, char **argv)
   ssigprocmask(SIG_BLOCK, &set, NULL);
 
   // Initialize the server socket once
-  int sockfd = initSocketServer(SERVER_PORT);
-  printf("Le serveur tourne sur le port : %i \n", SERVER_PORT);
+  int sockfd = initSocketServer(port);
+  printf("Le serveur tourne sur le port : %i \n", port);
 
   
   // Main server loop - continues until server is explicitly terminated
@@ -228,7 +236,7 @@ int main(int argc, char **argv)
         ret = sclose(pipefd[0]); // Ferme l'extrémité de lecture
 
         // Chargement de la carte
-        FileDescriptor fdmap = sopen("./resources/map.txt", O_RDONLY, 0);
+        FileDescriptor fdmap = sopen(map_file, O_RDONLY, 0);
         load_map(fdmap, pipefd[1], &gameState);
         sclose(fdmap);
 
