@@ -47,7 +47,7 @@ int main(int argc, char **argv) {
         sclose(pipe_client2[1]);
 
         // Execute pas_server
-        execl("./pas_server", "pas_server", NULL);
+        execl("./pas_server", "pas_server", argv[1], argv[2], NULL);
 
         // If execl fails
         perror("Erreur lors du lancement de pas_server");
@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
     }
 
     // Wait a moment before launching clients
-    usleep(200000); // 0.2 seconds
+    usleep(2000000); // 0.2 seconds
 
     // Launch first client
     pid_t client1_pid = sfork();
@@ -72,7 +72,7 @@ int main(int argc, char **argv) {
         sclose(pipe_client2[1]);
 
         // Execute pas_client with -test option
-        execl("./pas_client", "pas_client", "-test", NULL);
+        execl("./pas_client", "pas_client", SERVER_IP, argv[1], "-test", NULL);
 
         // If execl fails
         perror("Erreur lors du lancement de pas_client 1");
@@ -80,7 +80,7 @@ int main(int argc, char **argv) {
     }
 
     // Wait before launching second client
-    usleep(200000); // 0.2 seconds
+    usleep(2000000); // 0.2 seconds
 
     // Launch second client
     pid_t client2_pid = sfork();
@@ -97,7 +97,7 @@ int main(int argc, char **argv) {
         sclose(pipe_client1[1]);
 
         // Execute pas_client with -test option
-        execl("./pas_client", "pas_client", "-test", NULL);
+        execl("./pas_client", "pas_client", SERVER_IP, argv[1], "-test", NULL);
 
         // If execl fails
         perror("Erreur lors du lancement de pas_client 2");
@@ -126,14 +126,14 @@ int main(int argc, char **argv) {
             nwrite(pipe_client1[1], &move1, sizeof(move1));
         }
 
-        usleep(100000); // Wait 1/10th of a second
+        usleep(1000000); // Wait 1/10th of a second
 
         // Read a movement for player 2
         if (fscanf(file2, " %c", &move2) == 1) {
             nwrite(pipe_client2[1], &move2, sizeof(move2));
         }
 
-        usleep(100000); // Wait 1/10th of a second
+        usleep(1000000); // Wait 1/10th of a second
 
         // Break if end of both files is reached
         if (feof(file1) && feof(file2)) {

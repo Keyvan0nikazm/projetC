@@ -13,10 +13,19 @@
 #include "utils_v3.h"
 
 int main(int argc, char *argv[]) {
+  if (argc < 3 || argc > 4) {
+    fprintf(stderr, "Usage: %s <server_ip> <server_port> [-test]\n", argv[0]);
+    exit(EXIT_FAILURE);
+  }
+
+  char *server_ip = argv[1];
+  int server_port = atoi(argv[2]);
+  int test_mode = (argc == 4 && strcmp(argv[3], "-test") == 0);
+
   printf("Bienvenue dans le programme d'inscription au serveur de jeu\n");
 
   int sockfd = ssocket();
-  sconnect(SERVER_IP, SERVER_PORT, sockfd);
+  sconnect(server_ip, server_port, sockfd);
 
   /* wait server response */
   char buffer[50];
@@ -29,6 +38,15 @@ int main(int argc, char *argv[]) {
   else
   {
     printf("Erreur lors de la réception de la réponse du serveur\n");
+  }
+
+  if (test_mode) {
+    printf("Mode test activé : lecture des mouvements depuis stdin\n");
+    char move;
+    ssize_t taille;
+    while ((taille = sread(STDIN_FILENO, &move, sizeof(move))) > 0) {
+      nwrite(sockfd, &move, taille);
+    }
   }
 
   // Create pipe for child-parent communication
