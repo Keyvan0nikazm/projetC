@@ -6,6 +6,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <ctype.h>
 
 #include "header.h"
 #include "game.h"
@@ -22,126 +23,109 @@ int main(int argc, char *argv[]) {
   int server_port = atoi(argv[2]);
   int test_mode = (argc == 4 && strcmp(argv[3], "-test") == 0);
 
-  printf("Bienvenue dans le programme d'inscription au serveur de jeu\n");
+  printf("Welcome to the game server registration program\n");
 
+  // Create and connect the socket
   int sockfd = ssocket();
   sconnect(server_ip, server_port, sockfd);
 
-  /* wait server response */
+  // Wait for the server response
   char buffer[50];
   ssize_t ret = sread(sockfd, buffer, sizeof(buffer) - 1);
-  if (ret > 0)
-  {
+  if (ret > 0) {
     buffer[ret] = '\0';
-    printf("Réponse du serveur : %s", buffer);
-  }
-  else
-  {
-    printf("Erreur lors de la réception de la réponse du serveur\n");
+    printf("Server response: %s", buffer);
+  } else {
+    printf("Error receiving server response\n");
   }
 
-  // Create pipe for child-parent communication
+  // Create a pipe for communication between parent and child processes
   int pipefd[2];
   spipe(pipefd);
   
   int childId = sfork();
   if (childId == 0) { // Child process (pas-cman-ipl)
-    printf("Je suis le processus PAC-MAN-IPL (pid: %d)\n", getpid());
     
-    // Close read end of pipe in child
+    // Close the read end of the pipe in the child process
     sclose(pipefd[0]);
     
     // Redirect stdout to the pipe (write end)
     dup2(pipefd[1], STDOUT_FILENO);
     
-    // Redirect socket to stdin
+    // Redirect the socket to stdin
     dup2(sockfd, STDIN_FILENO);
 
     // Close the original file descriptors
     sclose(pipefd[1]);
     sclose(sockfd);
     
-    // Execute pas-cman-ipl
-    printf("Lancement de l'interface graphique pas-cman-ipl...\n");
+    // Execute the graphical interface process
+    printf("Launching the graphical interface pas-cman-ipl...\n");
     execl("./target/release/pas-cman-ipl", "pas-cman-ipl", NULL);
 
     // This code is only reached if execl fails
     perror("Error executing pas-cman-ipl");
     exit(EXIT_FAILURE);
   } else { // Parent process
-    printf("Je suis le processus parent (pid: %d)\n", getpid());
     
-    // Close write end of pipe in parent
+    // Close the write end of the pipe in the parent process
     sclose(pipefd[1]);
     
-    // Game state initialization
+    // Initialize the game state
     struct GameState state;
     // Initialize game state here if needed
     
-    // Handle test mode in the parent process after launching the graphical interface
+    // Handle test mode in the parent process
     if (test_mode) {
-      printf("Mode test activé : lecture des mouvements depuis stdin\n");
+      printf("Test mode enabled: reading moves from stdin\n");
       char move;
       ssize_t taille;
       while ((taille = sread(STDIN_FILENO, &move, sizeof(move))) > 0) {
         nwrite(sockfd, &move, taille);
       }
     } else {
-      // Buffer for reading from pipe
+      // Buffer for reading from the pipe
       char command_buffer[1024];
       ssize_t bytes_read;
 
       // Main communication loop
       while ((bytes_read = sread(pipefd[0], command_buffer, 1024 - 1)) > 0) {
         command_buffer[bytes_read] = '\0';
-        
-        // Debugging: Print raw received data with visible representation of non-printable chars
-        printf("Raw data received (%ld bytes): ", bytes_read);
-        for (int i = 0; i < bytes_read; i++) {
-          if (command_buffer[i] >= 32 && command_buffer[i] <= 126)
-            printf("%c", command_buffer[i]);
-          else
-            printf("[%02X]", (unsigned char)command_buffer[i]);
-        }
-        printf("\n");
-        
+
         // Skip empty packages
         if (bytes_read == 0) {
           continue;
         }
-        
+
         // Parse the command from the child
-        enum Item player = PLAYER1; // Default player
-        enum Direction dir = DOWN;  // Default direction
-        
-        // For binary data, interpret the first byte as the direction value
         if (bytes_read >= 1) {
           int direction_value = (unsigned char)command_buffer[0];
           
-          // Check if direction value is valid
-          if (direction_value >= 0 && direction_value <= 3) {
-            dir = (enum Direction)direction_value;
-            printf("Received direction (binary): %d\n", dir);
-            
-            // Process the command
-            // Envoyer la direction au serveur via le socket
-            nwrite(sockfd, &dir, sizeof(dir));
+          // Ignore textual data (e.g., ASCII letters)
+          if (isalpha(direction_value)) {
+            continue;
+          }
 
-          } else {
-            printf("Invalid direction value: %d\n", direction_value);
+          // Check if the direction value is valid
+          if (direction_value >= 0 && direction_value <= 3) {
+            enum Direction dir = (enum Direction)direction_value;
+
+            // Send the direction to the server via the socket
+            nwrite(sockfd, &dir, sizeof(dir));
           }
         }
       }
       
-      // Close the read end when done
+      // Close the read end of the pipe when done
       sclose(pipefd[0]);
     }
 
-    // Wait for child process to terminate
+    // Wait for the child process to terminate
     int status;
     swaitpid(childId, &status, 0);
   }
 
+  // Close the socket
   sclose(sockfd);
   return 0;
 }

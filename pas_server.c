@@ -55,10 +55,10 @@ int main(int argc, char **argv)
 
   // Initialize the server socket once
   int sockfd = initSocketServer(port);
-  printf("Le serveur tourne sur le port : %i \n", port);
+  printf("Server running on port: %i\n", port);
 
   
-  // Main server loop - continues until server is explicitly terminated
+  // Main server loop - continues until the server is explicitly terminated
   while (keep_running && !end) {
 
     // Unblock signals to allow handling of SIGINT
@@ -66,27 +66,20 @@ int main(int argc, char **argv)
     
     Player tabPlayers[MAX_PLAYERS];
     int nbPlayers = 0;
-    registrationTimeout = 0;  // Reset timeout flag for new registration phase
+    registrationTimeout = 0;  // Reset timeout flag for the new registration phase
     
-    printf("Démarrage de la phase d'inscription...\n");
+    printf("Starting the registration phase...\n");
 
     // Registration phase loop
-    while (!end && !registrationTimeout && nbPlayers < MAX_PLAYERS)
-    {
+    while (!end && !registrationTimeout && nbPlayers < MAX_PLAYERS) {
       int newsockfd;
-      while ((newsockfd = accept(sockfd, NULL, NULL)) < 0)
-      {
-        if (errno == EINTR)
-        {
+      while ((newsockfd = accept(sockfd, NULL, NULL)) < 0) {
+        if (errno == EINTR) {
           if (end) {
-            printf("Termination signal received. Shutting down...\n");
             keep_running = 0;
             break;
           }
-          
-          if (registrationTimeout)
-          {
-            // Just break out of the accept loop, we'll handle the disconnect outside
+          if (registrationTimeout) {
             break;
           }
           continue; // Retry accept() if interrupted
@@ -94,72 +87,58 @@ int main(int argc, char **argv)
         perror("ERROR accept");
         exit(EXIT_FAILURE);
       }
-      
-      // Handle registration timeout outside the accept loop
+
+      // Handle registration timeout
       if (registrationTimeout && nbPlayers == 1) {
-        printf("Timeout d'inscription avec un seul joueur. Déconnexion du joueur.\n");
-        const char *timeout_msg = "Temps d'inscription écoulé sans deuxième joueur. Déconnexion.\n";
+        const char *timeout_msg = "Registration timeout with only one player. Disconnecting the player.\n";
         if (tabPlayers[0].sockfd >= 0) {
-          if (write(tabPlayers[0].sockfd, timeout_msg, strlen(timeout_msg)) < 0) {
-            perror("Write error on timeout notification");
-          }
+          write(tabPlayers[0].sockfd, timeout_msg, strlen(timeout_msg));
           sclose(tabPlayers[0].sockfd);
           tabPlayers[0].sockfd = -1;
         }
         nbPlayers = 0;
         registrationTimeout = 0;
-        break; // Exit the registration loop to restart
+        break;
       }
 
-      // Check if termination signal was received during accept
+      // Check if termination signal was received
       if (end) {
         close(newsockfd);
         keep_running = 0;
         break;
       }
 
-      if (nbPlayers < MAX_PLAYERS)
-      {
+      if (nbPlayers < MAX_PLAYERS) {
         tabPlayers[nbPlayers].sockfd = newsockfd;
         nbPlayers++;
 
         char message[50];
-        snprintf(message, sizeof(message), "Client %d inscrit à une partie\n", nbPlayers);
+        snprintf(message, sizeof(message), "Client %d registered for a game\n", nbPlayers);
         nwrite(newsockfd, message, strlen(message));
-        printf("%s", message);
-        if (nbPlayers == 1)
-        {
-          printf("Premier client connecté, démarrage du chrono de 30 secondes...\n");
+        if (nbPlayers == 1) {
+          printf("First client connected, starting the 30-second timer...\n");
           startRegistrationTimer();
-
           ssigprocmask(SIG_BLOCK, &set, NULL);
-
-        }
-        else if (nbPlayers == MAX_PLAYERS)
-        {
-          printf("Deuxième client connecté, arrêt du chrono.\n");
+        } else if (nbPlayers == MAX_PLAYERS) {
+          printf("Second client connected, stopping the timer.\n");
           alarm(0);
           break;
         }
-      }
-      else
-      {
-        const char *message = "Partie complète, inscription refusée\n";
+      } else {
+        const char *message = "Game full, registration denied\n";
         nwrite(newsockfd, message, strlen(message));
-        printf("%s", message);
         sclose(newsockfd);
       }
     }
-    
-    // Skip game if no players registered
+
+    // Skip the game if no players registered
     if (nbPlayers == 0 || end) {
-      printf("Aucun joueur inscrit ou serveur en cours d'arrêt.\n");
       continue;
     }
 
-    printf("Phase d'inscription terminée. Démarrage du jeu avec %d joueur(s).\n", nbPlayers);
+    printf("Registration phase complete. Starting the game with %d player(s).\n", nbPlayers);
 
-    // GET SHARED MEMORY et initialisation mémoire partagée et sémaphore (parent)
+    // Shared memory and semaphore initialization
     int shm_id = sshmget(SHM_KEY, 2 * sizeof(pid_t), IPC_CREAT | PERM);
     struct GameState *shared_state = (struct GameState *)shmat(shm_id, NULL, 0);
     sem_create(SEM_KEY, 1, PERM, 1);
@@ -168,119 +147,107 @@ int main(int argc, char **argv)
     struct GameState gameState;
 
     int pipefd[2];
-    int ret = spipe(pipefd);
+    spipe(pipefd);
 
-    // Créer un client-handler par client connecté
+    // Create a client-handler for each connected client
     int clientHandlers[MAX_PLAYERS];
     for (int i = 0; i < nbPlayers; i++) {
-        int childId = sfork();
-        if (childId == 0) {
-            // CLIENT-HANDLER pour le joueur i
-            ret = sclose(pipefd[0]);
+      int childId = sfork();
+      if (childId == 0) {
+        // CLIENT-HANDLER for player i
+        sclose(pipefd[0]);
 
-            char move_buffer[TAILLE];
-            ssize_t move_bytes;
-            while ((move_bytes = sread(tabPlayers[i].sockfd, move_buffer, sizeof(move_buffer))) > 0) {
+        char move_buffer[TAILLE];
+        ssize_t move_bytes;
+        while ((move_bytes = sread(tabPlayers[i].sockfd, move_buffer, sizeof(move_buffer))) > 0) {
+          sem_down(sem_id, 0);  // Lock shared memory
 
-                sem_down(sem_id, 0);  // Lock shared memory
+          // Process the move with process_user_command
+          int player_id = i + 1;  // Player ID (1 or 2)
+          enum Direction dir = (enum Direction)move_buffer[0];
+          enum Item player = (player_id == 1) ? PLAYER1 : PLAYER2;
 
-                // Traitement du mouvement avec process_user_command
-                int player_id = i + 1;  // Player ID (1 or 2)
-                enum Direction dir = (enum Direction)move_buffer[0];
-                enum Item player = (player_id == 1) ? PLAYER1 : PLAYER2;
+          // Update the game state and send necessary messages
+          bool game_over = process_user_command(shared_state, player, dir, pipefd[1]);
 
-                // Met à jour l'état du jeu et envoie les messages nécessaires
-                bool game_over = process_user_command(shared_state, player, dir, pipefd[1]);
-
-                sem_up(sem_id, 0);  // Release the lock on shared memory
-            }
-            if (move_bytes == 0) {
-            } else if (move_bytes < 0) {
-                perror("Erreur de lecture sur la socket client");
-            }
-
-            // Fin de connexion client
-            sclose(tabPlayers[i].sockfd);
-            ret = sclose(pipefd[1]);
-            shmdt(shared_state);
-            exit(0);
-        } else {
-            clientHandlers[i] = childId;
+          sem_up(sem_id, 0);  // Release the lock on shared memory
         }
+
+        // End client connection
+        sclose(tabPlayers[i].sockfd);
+        sclose(pipefd[1]);
+        shmdt(shared_state);
+        exit(0);
+      } else {
+        clientHandlers[i] = childId;
+      }
     }
 
-    // Broadcaster
+    // Broadcaster process
     int childId2 = sfork();
     if (childId2 == 0) {
-        // DEUXIÈME ENFANT (broadcaster)
-        ret = sclose(pipefd[1]);
+      sclose(pipefd[1]);
 
-        char buffer[TAILLE];
-        ssize_t bytes_read;
-        
-        // First send registration message to each client
+      char buffer[TAILLE];
+      ssize_t bytes_read;
+
+      // Send registration message to each client
+      for (int i = 0; i < nbPlayers; i++) {
+        send_registered(i + 1, tabPlayers[i].sockfd);
+      }
+
+      while ((bytes_read = sread(pipefd[0], buffer, sizeof(buffer))) > 0) {
         for (int i = 0; i < nbPlayers; i++) {
-            send_registered(i+1, tabPlayers[i].sockfd); // Send player ID (1 or 2)
+          nwrite(tabPlayers[i].sockfd, buffer, bytes_read);
         }
+      }
 
-        while((bytes_read = sread(pipefd[0], buffer, sizeof(buffer))) > 0) {
-            for (int i = 0; i < nbPlayers; i++){
-                nwrite(tabPlayers[i].sockfd, buffer, bytes_read);
-            }
-        }
-
-        sclose(pipefd[0]);
-        exit(0);
+      sclose(pipefd[0]);
+      exit(0);
     } else {
-        // PARENT
-        ret = sclose(pipefd[0]); // Ferme l'extrémité de lecture
+      sclose(pipefd[0]);
 
-        // Chargement de la carte
-        FileDescriptor fdmap = sopen(map_file, O_RDONLY, 0);
-        load_map(fdmap, pipefd[1], &gameState);
-        sclose(fdmap);
+      // Load the map
+      FileDescriptor fdmap = sopen(map_file, O_RDONLY, 0);
+      load_map(fdmap, pipefd[1], &gameState);
+      sclose(fdmap);
 
-        // Synchroniser la mémoire partagée avec l'état initial du jeu
-        memcpy(shared_state, &gameState, sizeof(struct GameState));
-        shmdt(shared_state);
-        
-        // Attendre que les client-handlers terminent
-        int status;
-        printf("Attente de la fin de la partie...\n");
-        for (int i = 0; i < nbPlayers; i++) {
-            swaitpid(clientHandlers[i], &status, 0);
-            printf("Client-handler %d terminé\n", i+1);
+      // Synchronize shared memory with the initial game state
+      memcpy(shared_state, &gameState, sizeof(struct GameState));
+      shmdt(shared_state);
+
+      // Wait for client-handlers to finish
+      int status;
+      for (int i = 0; i < nbPlayers; i++) {
+        swaitpid(clientHandlers[i], &status, 0);
+      }
+
+      sclose(pipefd[1]);
+      swaitpid(childId2, &status, 0);
+
+      // Clean up game resources
+      if (shm_id >= 0) {
+        sshmdelete(shm_id);
+      }
+
+      if (sem_id >= 0) {
+        sem_delete(sem_id);
+      }
+
+      // Close client sockets
+      for (int i = 0; i < nbPlayers; i++) {
+        if (tabPlayers[i].sockfd >= 0) {
+          sclose(tabPlayers[i].sockfd);
         }
-        
-        ret = sclose(pipefd[1]);
-        swaitpid(childId2, &status, 0);
-        printf("Broadcaster terminé\n");
-        
-        // Nettoyage des ressources de la partie
-        if (shm_id >= 0) {
-            sshmdelete(shm_id);
-        }
-        
-        if (sem_id >= 0) {
-            sem_delete(sem_id);
-        }
-        
-        // Fermer les sockets des clients
-        for (int i = 0; i < nbPlayers; i++) {
-            if (tabPlayers[i].sockfd >= 0) {
-                sclose(tabPlayers[i].sockfd);
-            }
-        }
-        
-        printf("Partie terminée. Préparation d'une nouvelle phase d'inscription.\n");
+      }
     }
   }
-  
+
   // Cleanup before exiting
   if (sockfd >= 0) {
     sclose(sockfd);
   }
-  
-  printf("Le serveur est arrêté.\n");
+
+  printf("Server stopped.\n");
   return 0;
 }
