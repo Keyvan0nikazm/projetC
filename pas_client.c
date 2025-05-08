@@ -78,10 +78,10 @@ int main(int argc, char *argv[]) {
     // Handle test mode in the parent process
     if (test_mode) {
       printf("Test mode enabled: reading moves from stdin\n");
-      char move;
+      enum Direction dir;
       ssize_t taille;
-      while ((taille = sread(STDIN_FILENO, &move, sizeof(move))) > 0) {
-        nwrite(sockfd, &move, taille);
+      while ((taille = sread(STDIN_FILENO, &dir, sizeof(dir))) > 0) {
+        nwrite(sockfd, &dir, sizeof(dir));
       }
     } else {
       // Buffer for reading from the pipe

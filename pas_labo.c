@@ -12,20 +12,20 @@
 #include "game.h"
 
 // Function to convert character movements to Direction enum values
-char convert_movement_char(char move_char) {
-    // Convert character movement to numeric value
+enum Direction convert_movement_char(char move_char) {
+    // Convert character movement to Direction enum value
     switch (move_char) {
         case 'v':
-            return (char)DOWN;  // 0
+            return DOWN;
         case '>':
-            return (char)RIGHT; // 1
+            return RIGHT;
         case '<':
-            return (char)LEFT;  // 2
+            return LEFT;
         case '^':
-            return (char)UP;    // 3
+            return UP;
         default:
             fprintf(stderr, "Caractère de mouvement invalide: %c\n", move_char);
-            return (char)DOWN;  // Default to DOWN as fallback
+            return DOWN;  // Default to DOWN as fallback
     }
 }
 
@@ -142,7 +142,7 @@ int main(int argc, char **argv) {
     printf("Démarrage de l'envoi des mouvements...\n");
 
     char move1, move2;
-    char direction1, direction2;
+    enum Direction direction1, direction2;
     while (1) {
         // Read a movement for player 1
         if (fscanf(file1, " %c", &move1) == 1) {

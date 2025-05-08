@@ -164,14 +164,13 @@ int main(int argc, char **argv)
         // CLIENT-HANDLER for player i
         sclose(pipefd[0]);
 
-        char move_buffer[TAILLE];
+        enum Direction dir;
         ssize_t move_bytes;
-        while ((move_bytes = sread(tabPlayers[i].sockfd, move_buffer, sizeof(move_buffer))) > 0) {
+        while ((move_bytes = sread(tabPlayers[i].sockfd, &dir, sizeof(dir))) > 0) {
           sem_down(sem_id, 0);  // Lock shared memory
 
           // Process the move with process_user_command
           int player_id = i + 1;  // Player ID (1 or 2)
-          enum Direction dir = (enum Direction)move_buffer[0];
           enum Item player = (player_id == 1) ? PLAYER1 : PLAYER2;
 
           // Update the game state and send necessary messages
@@ -195,7 +194,7 @@ int main(int argc, char **argv)
     if (childId2 == 0) {
       sclose(pipefd[1]);
 
-      char buffer[TAILLE];
+      union Message buffer;
       ssize_t bytes_read;
 
       // Send registration message to each client
@@ -203,9 +202,9 @@ int main(int argc, char **argv)
         send_registered(i + 1, tabPlayers[i].sockfd);
       }
 
-      while ((bytes_read = sread(pipefd[0], buffer, sizeof(buffer))) > 0) {
+      while ((bytes_read = sread(pipefd[0], &buffer, sizeof(buffer))) > 0) {
         for (int i = 0; i < nbPlayers; i++) {
-          nwrite(tabPlayers[i].sockfd, buffer, bytes_read);
+          nwrite(tabPlayers[i].sockfd, &buffer, bytes_read);
         }
       }
 
