@@ -29,13 +29,21 @@ void sigintHandler(int sig) {
 
 int main(int argc, char **argv)
 {
-  if (argc != 3) {
-    fprintf(stderr, "Usage: %s <port> <map_file>\n", argv[0]);
+
+  if (argc != 3 && argc != 4) {
+    fprintf(stderr, "Usage: %s <port> <map_file> [-test]\n", argv[0]);
     exit(EXIT_FAILURE);
   }
 
   int port = atoi(argv[1]);
   char *map_file = argv[2];
+  int test_mode = (argc == 4 && strcmp(argv[3], "-test") == 0); // Check if test mode is enabled
+
+  if (test_mode) {
+    printf("SERVER Test mode enabled. The server will not restart registration after a game.\n");
+  } else {
+    printf("SERVER Running in normal mode.\n");
+  }
 
   int keep_running = 1;  // Flag to control the server main loop
   
@@ -57,7 +65,6 @@ int main(int argc, char **argv)
   int sockfd = initSocketServer(port);
   printf("Server running on port: %i\n", port);
 
-  
   // Main server loop - continues until the server is explicitly terminated
   while (keep_running && !end) {
 
@@ -241,6 +248,16 @@ int main(int argc, char **argv)
         }
       }
     }
+
+    printf("Game finished.\n");
+
+    // Exit the main loop if in test mode
+    if (test_mode) {
+      printf("Test mode active: exiting after the game.\n");
+      break;
+    }
+
+    printf("Preparing for a new registration phase.\n");
   }
 
   // Cleanup before exiting

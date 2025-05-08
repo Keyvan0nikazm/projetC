@@ -65,7 +65,7 @@ int main(int argc, char **argv) {
         sclose(pipe_client2[1]);
 
         // Execute pas_server
-        execl("./pas_server", "pas_server", argv[1], argv[2], NULL);
+        execl("./pas_server", "pas_server", argv[1], argv[2], "-test", NULL);
 
         // If execl fails
         perror("Erreur lors du lancement de pas_server");
