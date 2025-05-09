@@ -143,12 +143,24 @@ int main(int argc, char **argv) {
 
     char move1, move2;
     enum Direction direction1, direction2;
+    struct GameState state; // Add GameState to track game information locally
+
+    // Initialize the GameState (assuming the map has been loaded already)
+    memset(&state, 0, sizeof(struct GameState));
+    
     while (1) {
         // Read a movement for player 1
         if (fscanf(file1, " %c", &move1) == 1) {
             direction1 = convert_movement_char(move1);
+            
+            // Instead of just writing the raw direction, create a proper message
             nwrite(pipe_client1[1], &direction1, sizeof(direction1));
+            
             printf("Mouvement envoyé pour le joueur 1: %c (direction %d)\n", move1, direction1);
+            
+            // Update the local game state (if needed)
+            // This would require information from the server that we don't have here
+            // process_user_command(&state, PLAYER1, direction1, STDOUT_FILENO);
         }
 
         usleep(100000);
@@ -156,8 +168,15 @@ int main(int argc, char **argv) {
         // Read a movement for player 2
         if (fscanf(file2, " %c", &move2) == 1) {
             direction2 = convert_movement_char(move2);
+            
+            // Instead of just writing the raw direction, create a proper message
             nwrite(pipe_client2[1], &direction2, sizeof(direction2));
+            
             printf("Mouvement envoyé pour le joueur 2: %c (direction %d)\n", move2, direction2);
+            
+            // Update the local game state (if needed)
+            // This would require information from the server that we don't have here
+            // process_user_command(&state, PLAYER2, direction2, STDOUT_FILENO);
         }
 
         usleep(100000);

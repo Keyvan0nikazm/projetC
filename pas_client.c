@@ -29,14 +29,18 @@ int main(int argc, char *argv[]) {
   int sockfd = ssocket();
   sconnect(server_ip, server_port, sockfd);
 
-  // Wait for the server response
-  char buffer[50];
-  ssize_t ret = sread(sockfd, buffer, sizeof(buffer) - 1);
-  if (ret > 0) {
-    buffer[ret] = '\0';
-    printf("Server response: %s", buffer);
+  // Wait for the server response - expect a REGISTRATION message
+  union Message reg_msg;
+  ssize_t ret = sread(sockfd, &reg_msg, sizeof(union Message));
+  if (ret > 0 && reg_msg.registration.msgt == REGISTRATION) {
+    printf("Server registered client as player %d\n", reg_msg.registration.player);
+    if (reg_msg.registration.player == 0) {
+      printf("Registration denied: game is full\n");
+      sclose(sockfd);
+      return EXIT_FAILURE;
+    }
   } else {
-    printf("Error receiving server response\n");
+    printf("Error receiving server response or invalid message\n");
   }
 
   // Create a pipe for communication between parent and child processes
@@ -78,9 +82,16 @@ int main(int argc, char *argv[]) {
     // Handle test mode in the parent process
     if (test_mode) {
       printf("Test mode enabled: reading moves from stdin\n");
+      
+      // Use proper message structure for Direction
       enum Direction dir;
       ssize_t taille;
       while ((taille = sread(STDIN_FILENO, &dir, sizeof(dir))) > 0) {
+        // Create a proper movement message
+        union Message move_msg;
+        move_msg.movement.msgt = MOVEMENT;
+        move_msg.movement.id = (reg_msg.registration.player == 1) ? PLAYER1_ID : PLAYER2_ID;
+        // Direction is sent directly as we're in test mode
         nwrite(sockfd, &dir, sizeof(dir));
       }
     } else {
@@ -110,7 +121,7 @@ int main(int argc, char *argv[]) {
           if (direction_value >= 0 && direction_value <= 3) {
             enum Direction dir = (enum Direction)direction_value;
 
-            // Send the direction to the server via the socket
+            // Send the direction using the proper message format
             nwrite(sockfd, &dir, sizeof(dir));
           }
         }

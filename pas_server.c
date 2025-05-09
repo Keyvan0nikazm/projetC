@@ -119,9 +119,12 @@ int main(int argc, char **argv)
         tabPlayers[nbPlayers].sockfd = newsockfd;
         nbPlayers++;
 
-        char message[50];
-        snprintf(message, sizeof(message), "Client %d registered for a game\n", nbPlayers);
-        nwrite(newsockfd, message, strlen(message));
+        // Format registration message properly
+        union Message reg_msg;
+        reg_msg.registration.msgt = REGISTRATION;
+        reg_msg.registration.player = nbPlayers;
+        nwrite(newsockfd, &reg_msg, sizeof(union Message));
+        
         if (nbPlayers == 1) {
           printf("First client connected, starting the 30-second timer...\n");
           startRegistrationTimer();
@@ -132,8 +135,11 @@ int main(int argc, char **argv)
           break;
         }
       } else {
-        const char *message = "Game full, registration denied\n";
-        nwrite(newsockfd, message, strlen(message));
+        // Use structured message for rejection
+        union Message reject_msg;
+        reject_msg.registration.msgt = REGISTRATION;
+        reject_msg.registration.player = 0; // 0 indicates rejection
+        nwrite(newsockfd, &reject_msg, sizeof(union Message));
         sclose(newsockfd);
       }
     }
@@ -164,19 +170,23 @@ int main(int argc, char **argv)
         // CLIENT-HANDLER for player i
         sclose(pipefd[0]);
 
-        enum Direction dir;
+        union Message move_msg;
         ssize_t move_bytes;
-        while ((move_bytes = sread(tabPlayers[i].sockfd, &dir, sizeof(dir))) > 0) {
-          sem_down(sem_id, 0);  // Lock shared memory
+        while ((move_bytes = sread(tabPlayers[i].sockfd, &move_msg, sizeof(union Message))) > 0) {
+          // Process message based on its type
+          if (move_bytes == sizeof(enum Direction)) {
+            enum Direction dir = *((enum Direction*)&move_msg);
+            sem_down(sem_id, 0);  // Lock shared memory
 
-          // Process the move with process_user_command
-          int player_id = i + 1;  // Player ID (1 or 2)
-          enum Item player = (player_id == 1) ? PLAYER1 : PLAYER2;
+            // Process the move with process_user_command
+            int player_id = i + 1;  // Player ID (1 or 2)
+            enum Item player = (player_id == 1) ? PLAYER1 : PLAYER2;
 
-          // Update the game state and send necessary messages
-          bool game_over = process_user_command(shared_state, player, dir, pipefd[1]);
+            // Update the game state and send necessary messages
+            bool game_over = process_user_command(shared_state, player, dir, pipefd[1]);
 
-          sem_up(sem_id, 0);  // Release the lock on shared memory
+            sem_up(sem_id, 0);  // Release the lock on shared memory
+          }
         }
 
         // End client connection
